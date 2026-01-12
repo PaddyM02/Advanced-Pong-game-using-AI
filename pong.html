@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Fancy Pong</title>
+<style>
+  body { margin:0; background:black; text-align:center; font-family:Arial; }
+  canvas { display:block; margin:auto; border:2px solid white; }
+</style>
+</head>
+<body>
+<h2>Fancy Pong — Mouse or Arrow Keys | P = Pause</h2>
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+
+<script>
+window.onload = function() {
+
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+const PADDLE_HEIGHT = 100;
+const PADDLE_THICKNESS = 10;
+
+let paddle1Y = 250;
+let paddle2Y = 250;
+
+let ballX = canvas.width/2;
+let ballY = canvas.height/2;
+let ballSpeedX = 6;
+let ballSpeedY = 4;
+
+let player1Score = 0;
+let player2Score = 0;
+const WINNING_SCORE = 5;
+
+let paused = false;
+let gameOver = false;
+
+let up=false, down=false;
+let shake = 0;
+let aiSpeed = 5;
+
+// Ask for username
+let username = prompt("Enter your username:", "Player");
+
+// Ball trail
+let trail = [];
+
+// Particles
+let particles = [];
+
+// Power-up
+let powerUp = {x: Math.random()*canvas.width, y: Math.random()*canvas.height, active:true};
+
+// Event listeners
+document.addEventListener("keydown", e=>{
+  if(e.key==="ArrowUp") up=true;
+  if(e.key==="ArrowDown") down=true;
+  if(e.key==="p") paused=!paused;
+});
+document.addEventListener("keyup", e=>{
+  if(e.key==="ArrowUp") up=false;
+  if(e.key==="ArrowDown") down=false;
+});
+canvas.addEventListener("mousemove", e=>{
+  let rect=canvas.getBoundingClientRect();
+  paddle1Y = e.clientY - rect.top - PADDLE_HEIGHT/2;
+});
+canvas.addEventListener("mousedown", ()=>{
+  if(gameOver){
+    player1Score=0;
+    player2Score=0;
+    gameOver=false;
+    resetBall();
+  }
+});
+
+// Game loop
+function gameLoop(){
+  move();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+gameLoop();
+
+// Move everything
+function move(){
+  if(paused || gameOver) return;
+
+  if(up) paddle1Y -= 8;
+  if(down) paddle1Y += 8;
+
+  // AI movement (fixed speed)
+  let paddle2Center = paddle2Y + PADDLE_HEIGHT/2;
+  if(paddle2Center < ballY-10) paddle2Y += aiSpeed;
+  else if(paddle2Center > ballY+10) paddle2Y -= aiSpeed;
+
+  ballX += ballSpeedX;
+  ballY += ballSpeedY;
+
+  // Bounce top/bottom
+  if(ballY<0 || ballY>canvas.height) { ballSpeedY*=-1; createParticles(ballX,ballY); }
+
+  // Left paddle (player)
+  if(ballX < PADDLE_THICKNESS){
+    if(ballY>paddle1Y && ballY<paddle1Y+PADDLE_HEIGHT){
+      ballSpeedX*=-1.05;
+      let deltaY = ballY-(paddle1Y+PADDLE_HEIGHT/2);
+      ballSpeedY = deltaY*0.35;
+      screenShake();
+      createParticles(ballX,ballY);
+    } else {
+      player2Score++;
+      resetBall();
+    }
+  }
+
+  // Right paddle (AI)
+  if(ballX > canvas.width-PADDLE_THICKNESS){
+    if(ballY>paddle2Y && ballY<paddle2Y+PADDLE_HEIGHT){
+      ballSpeedX*=-1.05;
+      let deltaY = ballY-(paddle2Y+PADDLE_HEIGHT/2);
+      ballSpeedY = deltaY*0.35;
+      screenShake();
+      createParticles(ballX,ballY);
+    } else {
+      player1Score++;
+      resetBall();
+    }
+  }
+
+  // Power-up collision
+  if(powerUp.active && Math.abs(ballX-powerUp.x)<12 && Math.abs(ballY-powerUp.y)<12){
+    ballSpeedX*=1.5;
+    ballSpeedY*=1.5;
+    powerUp.active=false;
+  }
+
+  // Update trail
+  trail.push({x:ballX, y:ballY});
+  if(trail.length>20) trail.shift();
+
+  // Update particles
+  particles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.life--;});
+  particles = particles.filter(p=>p.life>0);
+}
+
+// Reset ball after score
+function resetBall(){
+  if(player1Score>=WINNING_SCORE || player2Score>=WINNING_SCORE){
+    gameOver=true;
+  }
+  ballX = canvas.width/2;
+  ballY = canvas.height/2;
+  ballSpeedX = -ballSpeedX;
+  ballSpeedY = 4;
+  powerUp.x = Math.random()*canvas.width;
+  powerUp.y = Math.random()*canvas.height;
+  powerUp.active = true;
+}
+
+// Draw everything
+function draw(){
+  if(shake>0){ ctx.save(); ctx.translate(Math.random()*shake-shake/2,Math.random()*shake-shake/2); shake--; }
+
+  // Background gradient
+  let gradient = ctx.createLinearGradient(0,0,0,canvas.height);
+  gradient.addColorStop(0,"#111");
+  gradient.addColorStop(1,"#333");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  // Net
+  for(let i=0;i<canvas.height;i+=30){
+    ctx.fillStyle="white";
+    ctx.fillRect(canvas.width/2-1,i,2,15);
+  }
+
+  // Trail
+  trail.forEach((t,i)=>{
+    ctx.beginPath();
+    ctx.arc(t.x,t.y,10*(i/trail.length),0,Math.PI*2);
+    ctx.fillStyle="rgba(255,255,255,"+(i/trail.length)+")";
+    ctx.fill();
+  });
+
+  // Glow effect
+  ctx.shadowColor="white";
+  ctx.shadowBlur=10;
+
+  // Paddles
+  ctx.fillStyle="white";
+  ctx.fillRect(0,paddle1Y,PADDLE_THICKNESS,PADDLE_HEIGHT);
+  ctx.fillRect(canvas.width-PADDLE_THICKNESS,paddle2Y,PADDLE_THICKNESS,PADDLE_HEIGHT);
+
+  // Ball
+  ctx.beginPath();
+  ctx.arc(ballX, ballY, 10, 0, Math.PI*2);
+  ctx.fill();
+
+  // Particles
+  particles.forEach(p=>{
+    ctx.fillStyle="yellow";
+    ctx.fillRect(p.x,p.y,2,2);
+  });
+
+  // Power-up
+  if(powerUp.active){
+    ctx.beginPath();
+    ctx.arc(powerUp.x, powerUp.y, 8,0,Math.PI*2);
+    ctx.fillStyle="red";
+    ctx.fill();
+  }
+
+  ctx.shadowBlur = 0;
+
+  // Score
+  ctx.fillStyle="white";
+  ctx.font="30px Arial";
+  ctx.fillText(player1Score,100,50);
+  ctx.fillText(player2Score,canvas.width-100,50);
+
+  // Pause / Game Over
+  if(paused){
+    ctx.font="40px Arial";
+    let text="PAUSED";
+    let textWidth = ctx.measureText(text).width;
+    ctx.fillText(text, canvas.width/2 - textWidth/2, canvas.height/2);
+  }
+
+  if(gameOver){
+    ctx.font="40px Arial";
+    let winner = (player1Score>=WINNING_SCORE) ? username+" wins!" : "AI wins!";
+    let textWidth = ctx.measureText(winner).width;
+    ctx.fillText(winner, canvas.width/2 - textWidth/2, canvas.height/2-20);
+
+    ctx.font="25px Arial";
+    let restartText = "Click to Restart";
+    let restartWidth = ctx.measureText(restartText).width;
+    ctx.fillText(restartText, canvas.width/2 - restartWidth/2, canvas.height/2+20);
+  }
+
+  if(shake>0) ctx.restore();
+}
+
+// Particle explosion
+function createParticles(x,y){
+  for(let i=0;i<10;i++){
+    particles.push({
+      x:x, y:y,
+      vx:(Math.random()-0.5)*6,
+      vy:(Math.random()-0.5)*6,
+      life:20
+    });
+  }
+}
+
+// Screen shake
+function screenShake(){ shake=10; }
+
+};
+</script>
+</body>
+</html>
