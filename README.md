@@ -1,4 +1,4 @@
-# Fancy Pong AI
+# Advanced Pong Game
 
 A modern, single-player Pong game created with the help of **AI**. 
 Built using HTML5 Canvas and JavaScript, this game features a computer-controlled opponent, power-ups, particle effects,
